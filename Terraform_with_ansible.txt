@@ -1,0 +1,136 @@
+Terraform with Ansible
+
+============================================================================================================================
+
+with ansible
+
+permission chmod 0400  for pem files
+
+
+ 
+   281  sudo apt update
+  282  sudo apt install ansible
+  
+    273  vi /root/terraform/proj5/vivvirgina.pem
+  274  ls -ltrh
+  275  chmod 400 vivvirgina.pem
+  276  ls -ltrh
+  277  vi resources.tf
+  278  vi variable.tf
+  279  vi resources.tf
+  280  vi test.yml
+
+  260  cp -r ../proj3/resources.tf .
+  261  cp -r ../proj2/version.tf .
+  262  cp -r ../proj2/provider.tf .
+  263  cp -r ../proj2/variable.tf .
+
+ 
+
+root@ip-172-31-34-40:/usr/local/bin/proj# ls -ltrh
+total 24K
+-r-------- 1 root root 1.7K Sep 21 17:00 vivvirgina.pem
+-rw-r--r-- 1 root root  349 Sep 21 17:08 terraform.tfstate
+drwxr-xr-x 4 root root 4.0K Sep 21 17:11 terraform.tfstate.d
+-rw-r--r-- 1 root root   14 Sep 21 17:40 hosts
+-rw-r--r-- 1 root root  217 Sep 21 17:55 test.yml
+-rw-r--r-- 1 root root 1.7K Sep 21 17:59 resources.tf
+
+
+
+root@ip-172-31-34-40:/usr/local/bin/proj# cat resources.tf
+provider "aws" {
+  region     = "us-east-1"
+  access_key = "AKIAJNCSDCMD5MA74ZAA"
+  secret_key = "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"
+}
+
+resource "aws_security_group" "allow_all" {
+  name        = "allow_all"
+  description = "Allow all inbound traffic"
+  vpc_id      = "vpc-17d5cf6d"
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port = 80
+    to_port   = 80
+    protocol  = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_instance" "demo_instance" {
+  availability_zone           = "us-east-1a"
+  ami                         = "ami-0885b1f6bd170450c"
+  instance_type               = "t2.micro"
+  key_name                    = "vivvirgina"
+  count                       = 1
+  subnet_id                   = "subnet-accf56e1"
+  vpc_security_group_ids      = [aws_security_group.allow_all.id]
+  associate_public_ip_address = true
+  user_data                   = <<-EOF
+    #!/bin/bash
+    sudo apt-get update
+    sudo apt-get install -y python
+  #  sudo hostnamectl set-hostname server1
+    EOF
+
+  tags = {
+    Name = "instance-${count.index + 1}"
+  }
+
+  provisioner "local-exec" {
+    command = "echo ${self.public_ip} >> hosts"
+  }
+
+}
+
+
+resource "null_resource" "provisions" {
+  provisioner "local-exec" {
+    command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -u ubuntu --private-key /root/terraform/proj5/vivvirgina.pem -i hosts test.yml -b"#sudo
+  }
+  depends_on = [aws_instance.demo_instance]
+}
+
+
+variable "REGION" {
+  default = "us-east-1"
+}
+
+#Need to install ansible in the terraform machine
+
+root@ip-172-31-34-40:/usr/local/bin/proj#
+
+
+
+root@ip-172-31-34-40:/usr/local/bin/proj# cat test.yml
+---
+- hosts: all
+  tasks:
+    - name: install nginx
+      apt:
+        name: nginx
+        state: present
+        update_cache: yes
+    - name: Start services
+      service:
+        name: nginx
+        state: started
+
+---------
+========================================================
+=======================================================
+																					*************************************
